@@ -1,0 +1,46 @@
+name: build
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get upstream source (pinned)
+        shell: pwsh
+        run: |
+          git -c core.autocrlf=false clone https://github.com/felixkmh/DuplicateHider up
+          git -C up -c advice.detachedHead=false checkout bd8008ae36af569efb1c3482bd1e359107685555
+      - name: Apply BiS patch
+        shell: pwsh
+        run: |
+          python patch.py
+          git -C up diff --stat
+      - name: Get SDK libraries from the official release
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://github.com/felixkmh/DuplicateHider/releases/download/v3.14.5/felixkmh_DuplicateHider_Plugin_3_14_5.pext' -OutFile rel.zip
+          Expand-Archive rel.zip -DestinationPath rel
+          New-Item -ItemType Directory -Force lib | Out-Null
+          Copy-Item rel\QuickSearchSDK.dll, rel\QuickSearchSDK.Attributes.dll, rel\StartPage.SDK.dll lib\
+          $p = 'up\source\DuplicateHider.csproj'
+          $c = Get-Content $p -Raw
+          $lib = (Resolve-Path lib).Path
+          $c = $c -replace '<HintPath>[^<]*QuickSearchSDK\.dll</HintPath>', "<HintPath>$lib\QuickSearchSDK.dll</HintPath>"
+          $c = $c -replace '<HintPath>[^<]*QuickSearchSDK\.Attributes\.dll</HintPath>', "<HintPath>$lib\QuickSearchSDK.Attributes.dll</HintPath>"
+          $c = $c -replace '<HintPath>[^<]*StartPage\.SDK\.dll</HintPath>', "<HintPath>$lib\StartPage.SDK.dll</HintPath>"
+          Set-Content $p $c -Encoding UTF8
+          Select-String -Path $p -Pattern 'HintPath'
+      - uses: microsoft/setup-msbuild@v2
+      - name: Build
+        shell: pwsh
+        run: |
+          msbuild up\source\DuplicateHider.csproj -restore -p:Configuration=Release -p:PostBuildEvent= -v:m
+          Get-ChildItem up\source\bin\Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DuplicateHider-BiS
+          path: |
+            up/source/bin/Release/DuplicateHider.dll
+            up/source/bin/Release/DuplicateHider.pdb
