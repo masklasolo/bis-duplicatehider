@@ -2,6 +2,8 @@ name: build
 on:
   push:
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: windows-latest
@@ -61,3 +63,10 @@ jobs:
           path: |
             up/source/bin/Release/DuplicateHider.dll
             up/source/bin/Release/DuplicateHider.pdb
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag 2>$null
+          gh release create latest up/source/bin/Release/DuplicateHider.dll --title "DuplicateHider BiS" --notes "DuplicateHider by felixkmh (MIT) with BiS fixes. Built from the pinned upstream commit plus patch.py."
