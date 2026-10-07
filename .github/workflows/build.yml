@@ -32,6 +32,23 @@ jobs:
           $c = $c -replace '<HintPath>[^<]*StartPage\.SDK\.dll</HintPath>', "<HintPath>$lib\StartPage.SDK.dll</HintPath>"
           Set-Content $p $c -Encoding UTF8
           Select-String -Path $p -Pattern 'HintPath'
+      - name: Get icons from the official release
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force up\source\icons | Out-Null
+          $asm = [Reflection.Assembly]::LoadFile((Resolve-Path rel\DuplicateHider.dll).Path)
+          $st = $asm.GetManifestResourceStream('DuplicateHider.g.resources')
+          $rr = New-Object System.Resources.ResourceReader $st
+          foreach ($e in $rr) {
+            $k = [string]$e.Key
+            if ($k.StartsWith('icons/')) {
+              $n = [Uri]::UnescapeDataString($k.Substring(6))
+              $fs = [IO.File]::Create((Join-Path (Resolve-Path up\source\icons).Path $n))
+              $e.Value.CopyTo($fs)
+              $fs.Close()
+            }
+          }
+          Get-ChildItem up\source\icons
       - uses: microsoft/setup-msbuild@v2
       - name: Build
         shell: pwsh
